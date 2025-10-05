@@ -4,24 +4,31 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 bin_PROGRAMS = agl-input-manager
 
 agl_input_manager_SOURCES = \
+	device-udev.c \
 	agl-input-manager.c
 
 # options
 # Additional library
 agl_input_manager_LDADD = \
-	-lrt -lpthread
+	-lrt -lpthread \
+	@LIBSYSTEMD_LIBS@ \
+	@LIBUDEV_LIBS@
 
 # C compiler options
 agl_input_manager_CFLAGS = \
 	-g -Wall -Wno-unused-but-set-variable \
 	-I$(top_srcdir)/include \
-	-D_GNU_SOURCE
+	-D_GNU_SOURCE \
+	@LIBSYSTEMD_CFLAGS@ \
+	@LIBUDEV_CFLAGS@
 
 # C++ compiler options
 agl_input_manager_CXXFLAGS = \
 	-g -Wall -Wno-unused-but-set-variable \
 	-I$(top_srcdir)/include \
-	-D_GNU_SOURCE
+	-D_GNU_SOURCE \
+	@LIBSYSTEMD_CFLAGS@ \
+	@LIBUDEV_CFLAGS@
 
 # Linker options
 agl_input_manager_LDFLAGS =

@@ -5,6 +5,7 @@ bin_PROGRAMS = agl-input-manager
 
 agl_input_manager_SOURCES = \
 	device-udev.c \
+	device-input.c \
 	agl-input-manager.c
 
 # options
@@ -12,23 +13,30 @@ agl_input_manager_SOURCES = \
 agl_input_manager_LDADD = \
 	-lrt -lpthread \
 	@LIBSYSTEMD_LIBS@ \
-	@LIBUDEV_LIBS@
+	@LIBUDEV_LIBS@ \
+	@LIBEVDEV_LIBS@
 
 # C compiler options
 agl_input_manager_CFLAGS = \
 	-g -Wall -Wno-unused-but-set-variable \
+	-I$(top_srcdir)/3rdparty/wpa-supplicant \
 	-I$(top_srcdir)/include \
 	-D_GNU_SOURCE \
 	@LIBSYSTEMD_CFLAGS@ \
-	@LIBUDEV_CFLAGS@
+	@LIBUDEV_CFLAGS@ \
+	@LIBEVDEV_CFLAGS@
+
 
 # C++ compiler options
 agl_input_manager_CXXFLAGS = \
 	-g -Wall -Wno-unused-but-set-variable \
+	-I$(top_srcdir)/3rdparty/wpa-supplicant \
 	-I$(top_srcdir)/include \
 	-D_GNU_SOURCE \
 	@LIBSYSTEMD_CFLAGS@ \
-	@LIBUDEV_CFLAGS@
+	@LIBUDEV_CFLAGS@ \
+	@LIBEVDEV_CFLAGS@
+
 
 # Linker options
 agl_input_manager_LDFLAGS =

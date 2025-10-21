@@ -50,6 +50,7 @@ AM_PROG_LIBTOOL
 PKG_PROG_PKG_CONFIG
 PKG_CHECK_MODULES([LIBSYSTEMD], [libsystemd])
 PKG_CHECK_MODULES([LIBUDEV], [libudev])
+PKG_CHECK_MODULES([LIBEVDEV], [libevdev])
 AS_CASE( ["$enable_test"], [yes], [PKG_CHECK_MODULES([CMOCKA], [cmocka])],[])
 
 

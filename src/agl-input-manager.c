@@ -43,6 +43,7 @@ int main(int argc, char *argv[])
 
 	ret = sd_event_default(&event);
 	if (ret < 0) {
+		result = -1;
 		goto finish;
 	}
 
@@ -57,11 +58,13 @@ int main(int argc, char *argv[])
 
 	ret = device_input_setup(&ppdi, event);
 	if (ret < 0) {
+		result = -1;
 		goto finish;
 	}
 
 	ret = device_udev_setup(&pddu, event, device_udev_listener_handler, (void*)ppdi);
 	if (ret < 0) {
+		result = -1;
 		goto finish;
 	}
 
@@ -77,14 +80,8 @@ int main(int argc, char *argv[])
 		"READY=1\n"
 		"STATUS=Daemon startup completed, processing events.");
 
-	#ifdef _PRINTF_DEBUG_
-	(void) fprintf(stdout,"agl-input-manager: do device scan\n");
-	#endif
 	device_udev_scan(pddu);
 
-	#ifdef _PRINTF_DEBUG_
-	(void) fprintf(stdout,"agl-input-manager: start event loop\n");
-	#endif
 	ret = sd_event_loop(event);
 	if (ret < 0) {
 		result = ret;

@@ -883,8 +883,8 @@ int device_input_setup(device_input_t **ppdi, sd_event *pevent)
 		goto do_return;
 	}
 
-	devnode = libevdev_uinput_get_devnode(pdi->uinput);
-	(void)rename(devnode, "/dev/input/eventG0");	// Fixed device node for uinput device
+	//devnode = libevdev_uinput_get_devnode(pdi->uinput);
+	//(void)rename(devnode, "/dev/input/eventG0");	// Fixed device node for uinput device
 	#ifdef _PRINTF_DEBUG_
 	devnode = libevdev_uinput_get_devnode(pdi->uinput);
 	(void) fprintf(stdout,"create uinput abs device %s\n", devnode);

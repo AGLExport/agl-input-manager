@@ -110,9 +110,42 @@ struct s_touch_device {
 	struct input_absinfo abs_mt_tracking_id;	/**< The abs info for MT TRACKING ID. */
 
 	device_input_touch_data_t touch_data;	/**< The touch data. */
+
+	int is_primary_device;	/**< This device is primary device or not. */
 };
 typedef struct s_touch_device touch_device_t;
 
+/**
+ * Sub function for touch config setting.
+ * It set some touch config to evdev instance.
+ *
+ * @param [in]	pdi	Pointer to struct s_device_input.
+ * @return int
+ * @retval	1	Has primary device.
+ * @retval	0	Does not have primary device.
+ * @retval	-1	Internal error. (Reserve)
+ * @retval	-2	Argument error.
+ */
+static int device_input_has_primary_device(struct s_device_input *pdi)
+{
+	int result = 0;
+	touch_device_t *ptouch_device = NULL;
+
+	if (pdi == NULL) {
+		result = -2;
+		goto do_return;
+	}
+
+	dl_list_for_each(ptouch_device, &pdi->devices, touch_device_t, list) {
+		if (ptouch_device->is_primary_device == 1) {
+			result = 1;
+			goto do_return;
+		}
+	}
+
+do_return:
+	return result;
+}
 /**
  * Sub function for touch config setting.
  * It set some touch config to evdev instance.
@@ -304,27 +337,16 @@ static int device_input_is_touch_device(struct libevdev *pevdev)
 do_return:
 	return result;
 }
-/**
- * Sub function for touch event handling.
- * Push touch event from data to uinput touch device.
- *
- * @param [in]	di	Pointer to top data that includes uinput device structure.
- * @param [in]	ditd	Pointer to data source touch data structure.
- * @return int
- * @retval	0	Push operation is successful.
- * @retval	-1	Internal error. (Reserve)
- * @retval	-2	Argument error.
- */
-static int device_input_push_touch_event(struct s_device_input *di, device_input_touch_data_t *ditd)
+#ifdef _PRINTF_DEBUG_
+static void debug_push_touch_event(device_input_touch_data_t *ditd)
 {
-	int result = 0;
-
 	// check arguments
-	if (di == NULL || ditd == NULL) {
+	if (ditd == NULL) {
 		goto do_return;
 	}
 
-#ifdef _PRINTF_DEBUG_
+	fprintf(stdout,"\n");
+
 	for (size_t slot = 0; slot < ditd->num_slots; slot++) {
 		int x = -1, y= -1, tracking_id = -1;
 		if (ditd->mt_elements[slot].slot.valid == 1) {
@@ -354,18 +376,97 @@ static int device_input_push_touch_event(struct s_device_input *di, device_input
 	}
 
 	if (ditd->abs_x.valid == 1) {
-		fprintf(stdout,"abs_x=%d\n", ditd->abs_x.value);
+		int abs_x = ditd->abs_x.value;
+		fprintf(stdout,"abs_x=%d\n", abs_x);
 	}
 	if (ditd->abs_y.valid == 1) {
-		fprintf(stdout,"abs_y=%d\n", ditd->abs_y.value);
+		int abs_y = ditd->abs_y.value;
+		fprintf(stdout,"abs_y=%d\n", abs_y);
 	}
 	if (ditd->btn_touch.valid == 1) {
-		fprintf(stdout,"btn_touch=%d\n", ditd->btn_touch.value);
+		int btn_touch = ditd->btn_touch.value;
+		fprintf(stdout,"btn_touch=%d\n", btn_touch);
 	}
 	if (ditd->timestamp.valid == 1) {
-		fprintf(stdout,"timestamp=%u\n", ditd->timestamp.value);
+		uint32_t timestamp = ditd->timestamp.value;
+		fprintf(stdout,"timestamp=%u\n", timestamp);
 	}
+
+do_return:
+	return;
+}
 #endif
+/**
+ * Sub function for touch event handling.
+ * Push touch event from data to uinput touch device.
+ *
+ * @param [in]	di	Pointer to top data that includes uinput device structure.
+ * @param [in]	ditd	Pointer to data source touch data structure.
+ * @return int
+ * @retval	0	Push operation is successful.
+ * @retval	-1	Internal error. (Reserve)
+ * @retval	-2	Argument error.
+ */
+static int device_input_push_touch_event(struct s_device_input *di, device_input_touch_data_t *ditd)
+{
+	int result = 0, ret = -1;
+
+	// check arguments
+	if (di == NULL || ditd == NULL) {
+		goto do_return;
+	}
+	
+
+	for (size_t slot = 0; slot < ditd->num_slots; slot++) {
+		int x = -1, y= -1, tracking_id = -1;
+		if (ditd->mt_elements[slot].slot.valid == 1) {
+			ssize_t s = ditd->mt_elements[slot].slot.value;
+			(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_MT_SLOT, s);
+		} else {
+			if (slot == 0) {
+				if ((ditd->mt_elements[0].position_x.valid == 1) ||
+					(ditd->mt_elements[0].position_y.valid == 1) ||
+					(ditd->mt_elements[0].tracking_id.valid == 1)) {
+					ret = libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_MT_SLOT, 0);
+				}
+			}
+		}
+		if (ditd->mt_elements[slot].position_x.valid == 1) {
+			x = ditd->mt_elements[slot].position_x.value;
+			(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_MT_POSITION_X, x);
+		}
+		if (ditd->mt_elements[slot].position_y.valid == 1) {
+			y = ditd->mt_elements[slot].position_y.value;
+			(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_MT_POSITION_Y, y);
+		}
+		if (ditd->mt_elements[slot].tracking_id.valid == 1) {
+			tracking_id = ditd->mt_elements[slot].tracking_id.value;
+			(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_MT_TRACKING_ID, tracking_id);
+		}
+	}
+
+	if (ditd->abs_x.valid == 1) {
+		int abs_x = ditd->abs_x.value;
+		(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_X, abs_x);
+	}
+	if (ditd->abs_y.valid == 1) {
+		int abs_y = ditd->abs_y.value;
+		(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_Y, abs_y);
+	}
+	if (ditd->btn_touch.valid == 1) {
+		int btn_touch = ditd->btn_touch.value;
+		(void)libevdev_uinput_write_event(di->uinput, EV_KEY, BTN_TOUCH, btn_touch);
+	}
+	if (ditd->timestamp.valid == 1) {
+		uint32_t timestamp = ditd->timestamp.value;
+		(void)libevdev_uinput_write_event(di->uinput, EV_MSC, MSC_TIMESTAMP, timestamp);
+	}
+
+	(void)libevdev_uinput_write_event(di->uinput, EV_SYN, SYN_REPORT, 0);
+
+	#ifdef _PRINTF_DEBUG_
+	debug_push_touch_event(ditd);
+	#endif
 
 do_return:
 	return result;
@@ -470,9 +571,6 @@ static int device_input_do_touch_device(struct s_touch_device *ptd)
 	int ret = 0;
 	size_t current_slots = 0;
 	struct input_event ev;
-	#ifdef _PRINTF_DEBUG_
-	fprintf(stdout,"\n");
-	#endif
 
 	do {
 		ret = libevdev_next_event(ptd->evdev, LIBEVDEV_READ_FLAG_NORMAL, &ev);
@@ -491,15 +589,16 @@ static int device_input_do_touch_device(struct s_touch_device *ptd)
 				}
 			} else if (ev.type == EV_SYN && ev.code == SYN_REPORT) {
 				// Process stored touch data
-				device_input_push_touch_event(ptd->pdi,&ptd->touch_data);
+				if (ptd->is_primary_device == 1) {
+					// Primary device, so push event to uinput device
+					device_input_push_touch_event(ptd->pdi,&ptd->touch_data);
+				}
+
 				// Clear stored data
 				device_input_clear_touch_event(&ptd->touch_data);
 			}
 		} else {
 			// No more event
-			#ifdef _PRINTF_DEBUG_
-			fprintf(stdout,"\n");
-			#endif
 			break;
 		}
 	} while(1);
@@ -533,10 +632,23 @@ static int touch_event_handler(sd_event_source *event, int fd, uint32_t revents,
 
 	if ((revents & (EPOLLHUP | EPOLLERR)) != 0) {
 		// Fail safe - disable udev event
+		struct s_device_input *pdi = ptd->pdi;
+		#ifdef _PRINTF_DEBUG_
+		fprintf(stdout,"remove device %s\n", libevdev_get_name(ptd->evdev));
+		#endif
 		dl_list_del(&ptd->list);
 		sd_event_source_disable_unref(event);
 		libevdev_free(ptd->evdev);
 		(void) free(ptd);
+		ret = device_input_has_primary_device(pdi);
+		if (ret == 0) {
+			// No primary device, so set first device to primary device
+			touch_device_t *first_device = NULL;
+			first_device = dl_list_first(&pdi->devices, touch_device_t, list);
+			if (first_device != NULL) {
+				first_device->is_primary_device = 1;
+			}
+		}
 	} else if ((revents & EPOLLIN) != 0) {
 		// Receive
 		(void)device_input_do_touch_device(ptd);
@@ -576,11 +688,18 @@ static int device_input_add_touch_device(struct s_device_input *pdi, struct libe
 	}
 	memset(ptd, 0, sizeof(struct s_touch_device));
 
+	ret = libevdev_grab(pevdev, LIBEVDEV_GRAB);
+	if (ret < 0) {
+		result = -1;
+		goto do_return;
+	}
+
 	ret = sd_event_add_io(pdi->event, &touch_event_source, libevdev_get_fd(pevdev), (EPOLLHUP | EPOLLERR | EPOLLIN), touch_event_handler, (void*)ptd);
 	if (ret < 0) {
 		result = -1;
 		goto do_return;
 	}
+
 
 	dl_list_init(&ptd->list);
 	ptd->pdi = pdi;
@@ -631,6 +750,13 @@ static int device_input_add_touch_device(struct s_device_input *pdi, struct libe
 			goto do_return;
 		}
 		memset(ptd->touch_data.mt_elements, 0, sizeof(device_input_abs_mt_element_t) * ptd->touch_data.num_slots);
+	}
+
+	ret = device_input_has_primary_device(pdi);
+	if (ret == 1) {
+		ptd->is_primary_device = 0;
+	} else {
+		ptd->is_primary_device = 1;
 	}
 
 	dl_list_add_tail(&pdi->devices, &ptd->list);
@@ -737,6 +863,7 @@ int device_input_setup(device_input_t **ppdi, sd_event *pevent)
 {
 	int ret = -1, result = 0;
 	struct s_device_input *pdi = NULL;
+	const char *devnode = NULL;
 
 	if (ppdi == NULL || pevent == NULL) {
 		result = -2;
@@ -756,12 +883,11 @@ int device_input_setup(device_input_t **ppdi, sd_event *pevent)
 		goto do_return;
 	}
 
+	devnode = libevdev_uinput_get_devnode(pdi->uinput);
+	(void)rename(devnode, "/dev/input/eventG0");	// Fixed device node for uinput device
 	#ifdef _PRINTF_DEBUG_
-	{
-		const char *devnode = NULL;
-		devnode = libevdev_uinput_get_devnode(pdi->uinput);
-		(void) fprintf(stdout,"create uinput abs device %s\n", devnode);
-	}
+	devnode = libevdev_uinput_get_devnode(pdi->uinput);
+	(void) fprintf(stdout,"create uinput abs device %s\n", devnode);
 	#endif
 
 	pdi->event = pevent;

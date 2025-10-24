@@ -446,12 +446,12 @@ static int device_input_push_touch_event(struct s_device_input *di, touch_device
 		}
 		if (td->touch_data.mt_elements[slot].position_x.valid == 1) {
 			x = (int64_t)td->touch_data.mt_elements[slot].position_x.value;
-			x = x * td->abs_mt_position_x.maximum / g_touch_device_max_width;
+			x = x * g_touch_device_max_width / td->abs_mt_position_x.maximum;
 			(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_MT_POSITION_X, (int32_t)x);
 		}
 		if (td->touch_data.mt_elements[slot].position_y.valid == 1) {
 			y = (int64_t)td->touch_data.mt_elements[slot].position_y.value;
-			y = y * td->abs_mt_position_y.maximum / g_touch_device_max_height;
+			y = y * g_touch_device_max_height / td->abs_mt_position_y.maximum;
 			(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_MT_POSITION_Y, (int32_t)y);
 		}
 		if (td->touch_data.mt_elements[slot].tracking_id.valid == 1) {
@@ -461,12 +461,12 @@ static int device_input_push_touch_event(struct s_device_input *di, touch_device
 	}
 	if (td->touch_data.abs_x.valid == 1) {
 		int64_t abs_x = (int64_t)td->touch_data.abs_x.value;
-		abs_x = abs_x * td->abs_x.maximum / g_touch_device_max_width;
+		abs_x = abs_x * g_touch_device_max_width /td->abs_x.maximum;
 		(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_X, (int32_t)abs_x);
 	}
 	if (td->touch_data.abs_y.valid == 1) {
 		int64_t abs_y = (int64_t)td->touch_data.abs_y.value;
-		abs_y = abs_y * td->abs_y.maximum / g_touch_device_max_height;
+		abs_y = abs_y * g_touch_device_max_height / td->abs_y.maximum;
 		(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_Y, (int32_t)abs_y);
 	}
 	if (td->touch_data.btn_touch.valid == 1) {

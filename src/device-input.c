@@ -189,17 +189,29 @@ static int device_input_uinput_set_touch_configs(struct libevdev *pevdev)
 		};
 
 		libevdev_enable_event_type(pevdev, EV_ABS);
+
 		absinfo.maximum = g_touch_device_max_width;
+		absinfo.resolution = 1;
 		libevdev_enable_event_code(pevdev, EV_ABS, ABS_X, &absinfo);
+
 		absinfo.maximum = g_touch_device_max_height;
+		absinfo.resolution = 1;
 		libevdev_enable_event_code(pevdev, EV_ABS, ABS_Y, &absinfo);
+
 		absinfo.maximum = 64;
+		absinfo.resolution = 0;
 		libevdev_enable_event_code(pevdev, EV_ABS, ABS_MT_SLOT, &absinfo);
+
 		absinfo.maximum = g_touch_device_max_width;
+		absinfo.resolution = 1;
 		libevdev_enable_event_code(pevdev, EV_ABS, ABS_MT_POSITION_X, &absinfo);
+
 		absinfo.maximum = g_touch_device_max_height;
+		absinfo.resolution = 1;
 		libevdev_enable_event_code(pevdev, EV_ABS, ABS_MT_POSITION_Y, &absinfo);
+
 		absinfo.maximum = 65535;
+		absinfo.resolution = 0;
 		libevdev_enable_event_code(pevdev, EV_ABS, ABS_MT_TRACKING_ID, &absinfo);
 	}
 
@@ -407,65 +419,69 @@ do_return:
  * @retval	-1	Internal error. (Reserve)
  * @retval	-2	Argument error.
  */
-static int device_input_push_touch_event(struct s_device_input *di, device_input_touch_data_t *ditd)
+static int device_input_push_touch_event(struct s_device_input *di, touch_device_t *td)
 {
 	int result = 0, ret = -1;
 
 	// check arguments
-	if (di == NULL || ditd == NULL) {
+	if (di == NULL || td == NULL) {
 		goto do_return;
 	}
 	
 
-	for (size_t slot = 0; slot < ditd->num_slots; slot++) {
-		int x = -1, y= -1, tracking_id = -1;
-		if (ditd->mt_elements[slot].slot.valid == 1) {
-			ssize_t s = ditd->mt_elements[slot].slot.value;
+	for (size_t slot = 0; slot < td->touch_data.num_slots; slot++) {
+		int64_t x = -1, y= -1;
+		int tracking_id = -1;
+		if (td->touch_data.mt_elements[slot].slot.valid == 1) {
+			ssize_t s = td->touch_data.mt_elements[slot].slot.value;
 			(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_MT_SLOT, s);
 		} else {
 			if (slot == 0) {
-				if ((ditd->mt_elements[0].position_x.valid == 1) ||
-					(ditd->mt_elements[0].position_y.valid == 1) ||
-					(ditd->mt_elements[0].tracking_id.valid == 1)) {
+				if ((td->touch_data.mt_elements[0].position_x.valid == 1) ||
+					(td->touch_data.mt_elements[0].position_y.valid == 1) ||
+					(td->touch_data.mt_elements[0].tracking_id.valid == 1)) {
 					ret = libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_MT_SLOT, 0);
 				}
 			}
 		}
-		if (ditd->mt_elements[slot].position_x.valid == 1) {
-			x = ditd->mt_elements[slot].position_x.value;
-			(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_MT_POSITION_X, x);
+		if (td->touch_data.mt_elements[slot].position_x.valid == 1) {
+			x = (int64_t)td->touch_data.mt_elements[slot].position_x.value;
+			x = x * td->abs_mt_position_x.maximum / g_touch_device_max_width;
+			(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_MT_POSITION_X, (int32_t)x);
 		}
-		if (ditd->mt_elements[slot].position_y.valid == 1) {
-			y = ditd->mt_elements[slot].position_y.value;
-			(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_MT_POSITION_Y, y);
+		if (td->touch_data.mt_elements[slot].position_y.valid == 1) {
+			y = (int64_t)td->touch_data.mt_elements[slot].position_y.value;
+			y = y * td->abs_mt_position_y.maximum / g_touch_device_max_height;
+			(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_MT_POSITION_Y, (int32_t)y);
 		}
-		if (ditd->mt_elements[slot].tracking_id.valid == 1) {
-			tracking_id = ditd->mt_elements[slot].tracking_id.value;
+		if (td->touch_data.mt_elements[slot].tracking_id.valid == 1) {
+			tracking_id = td->touch_data.mt_elements[slot].tracking_id.value;
 			(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_MT_TRACKING_ID, tracking_id);
 		}
 	}
-
-	if (ditd->abs_x.valid == 1) {
-		int abs_x = ditd->abs_x.value;
-		(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_X, abs_x);
+	if (td->touch_data.abs_x.valid == 1) {
+		int64_t abs_x = (int64_t)td->touch_data.abs_x.value;
+		abs_x = abs_x * td->abs_x.maximum / g_touch_device_max_width;
+		(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_X, (int32_t)abs_x);
 	}
-	if (ditd->abs_y.valid == 1) {
-		int abs_y = ditd->abs_y.value;
-		(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_Y, abs_y);
+	if (td->touch_data.abs_y.valid == 1) {
+		int64_t abs_y = (int64_t)td->touch_data.abs_y.value;
+		abs_y = abs_y * td->abs_y.maximum / g_touch_device_max_height;
+		(void)libevdev_uinput_write_event(di->uinput, EV_ABS, ABS_Y, (int32_t)abs_y);
 	}
-	if (ditd->btn_touch.valid == 1) {
-		int btn_touch = ditd->btn_touch.value;
+	if (td->touch_data.btn_touch.valid == 1) {
+		int btn_touch = td->touch_data.btn_touch.value;
 		(void)libevdev_uinput_write_event(di->uinput, EV_KEY, BTN_TOUCH, btn_touch);
 	}
-	if (ditd->timestamp.valid == 1) {
-		uint32_t timestamp = ditd->timestamp.value;
+	if (td->touch_data.timestamp.valid == 1) {
+		uint32_t timestamp = td->touch_data.timestamp.value;
 		(void)libevdev_uinput_write_event(di->uinput, EV_MSC, MSC_TIMESTAMP, timestamp);
 	}
 
 	(void)libevdev_uinput_write_event(di->uinput, EV_SYN, SYN_REPORT, 0);
 
 	#ifdef _PRINTF_DEBUG_
-	debug_push_touch_event(ditd);
+	debug_push_touch_event(&td->touch_data);
 	#endif
 
 do_return:
@@ -591,7 +607,7 @@ static int device_input_do_touch_device(struct s_touch_device *ptd)
 				// Process stored touch data
 				if (ptd->is_primary_device == 1) {
 					// Primary device, so push event to uinput device
-					device_input_push_touch_event(ptd->pdi,&ptd->touch_data);
+					device_input_push_touch_event(ptd->pdi, ptd);
 				}
 
 				// Clear stored data

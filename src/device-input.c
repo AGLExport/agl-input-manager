@@ -115,6 +115,10 @@ struct s_touch_device {
 };
 typedef struct s_touch_device touch_device_t;
 
+
+static int device_input_remove_touch_device(struct s_touch_device *ptd);
+static int device_input_add_touch_device(struct s_device_input *pdi, struct libevdev *pevdev);
+
 /**
  * Sub function for touch config setting.
  * It set some touch config to evdev instance.
@@ -280,7 +284,41 @@ do_return:
 
 	return result;
 }
+/**
+ * Sub function for uinput device handling.
+ * Destroy target uinput device.
+ *
+ * @param [in]	pdi	Pointer to callback function to use device event notification.
+ * @return int
+ * @retval	0	Success to change device infomation at list.
+ * @retval	-1	Internal error. (Reserve)
+ * @retval	-2	Argument error.
+ */
+static int device_input_uinput_device_destroy(struct s_device_input *pdi)
+{
+	int result = 0;
+	struct libevdev *pevdev = NULL;
+	struct libevdev_uinput *puidev = NULL;
 
+	if (pdi == NULL) {
+		result = -2;
+		goto do_return;
+	}
+
+	pevdev = pdi->evdev;
+	puidev = pdi->uinput;
+
+	if (puidev != NULL) {
+		libevdev_uinput_destroy(puidev);
+	}
+
+	if (pevdev != NULL) {
+		libevdev_free(pevdev);
+	}
+
+do_return:
+	return result;
+}
 /**
  * Sub function for touch event handling.
  * Check to device, it shall handle or not.
@@ -646,24 +684,8 @@ static int touch_event_handler(sd_event_source *event, int fd, uint32_t revents,
 	ptd = (struct s_touch_device*)userdata;
 
 	if ((revents & (EPOLLHUP | EPOLLERR)) != 0) {
-		// Fail safe - disable udev event
-		struct s_device_input *pdi = ptd->pdi;
-		#ifdef _PRINTF_DEBUG_
-		fprintf(stdout,"remove device %s\n", libevdev_get_name(ptd->evdev));
-		#endif
-		dl_list_del(&ptd->list);
-		sd_event_source_disable_unref(event);
-		libevdev_free(ptd->evdev);
-		(void) free(ptd);
-		ret = device_input_has_primary_device(pdi);
-		if (ret == 0) {
-			// No primary device, so set first device to primary device
-			touch_device_t *first_device = NULL;
-			first_device = dl_list_first(&pdi->devices, touch_device_t, list);
-			if (first_device != NULL) {
-				first_device->is_primary_device = 1;
-			}
-		}
+		// Disconnected. Remove device from input manager.
+		(void)device_input_remove_touch_device(ptd);
 	} else if ((revents & EPOLLIN) != 0) {
 		// Receive
 		(void)device_input_do_touch_device(ptd);
@@ -783,6 +805,49 @@ do_return:
 	return result;
 }
 
+/**
+ * Sub function for touch event handling.
+ * Setup for the touch event loop.
+ *
+ * @param [in]	ptd	Pointer to instance for struct s_touch_device.
+ * @return int
+ * @retval	0	Removed.
+ * @retval	-1	Internal error. (Reserve)
+ * @retval	-2	Argument error.
+ */
+static int device_input_remove_touch_device(struct s_touch_device *ptd)
+{
+	int ret = -1, result = 0;
+	struct s_device_input *pdi = ptd->pdi;
+
+	if (ptd == NULL) {
+		result = -2;
+		goto do_return;
+	}
+
+	#ifdef _PRINTF_DEBUG_
+	fprintf(stdout,"remove device %s\n", libevdev_get_name(ptd->evdev));
+	#endif
+
+	// Remove device from list
+	dl_list_del(&ptd->list);
+	sd_event_source_disable_unref(ptd->input_event_source);
+	libevdev_free(ptd->evdev);
+	ret = device_input_has_primary_device(pdi);
+	if (ret == 0) {
+		// No primary device, so set first device to primary device
+		touch_device_t *first_device = NULL;
+		first_device = dl_list_first(&pdi->devices, touch_device_t, list);
+		if (first_device != NULL) {
+			first_device->is_primary_device = 1;
+		}
+	}
+
+	(void) free(ptd->touch_data.mt_elements);
+	(void) free(ptd);
+do_return:
+	return result;
+}
 /**
  * External interface for touch event handling.
  * Add new input device to touch event handling structure.
@@ -933,6 +998,15 @@ int device_input_cleanup(device_input_t *pdi)
 	}
 
 	di = (struct s_device_input*)pdi;
+
+	while(dl_list_empty(&di->devices) == 0) {
+		struct s_touch_device *ptd = NULL;
+
+		ptd = dl_list_first(&di->devices, struct s_touch_device, list);
+		(void)device_input_remove_touch_device(ptd);
+	}
+
+	(void) device_input_uinput_device_destroy(di);
 
 	(void) free(di);
 

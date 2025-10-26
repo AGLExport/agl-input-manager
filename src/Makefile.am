@@ -6,6 +6,7 @@ bin_PROGRAMS = agl-input-manager
 agl_input_manager_SOURCES = \
 	device-udev.c \
 	device-input.c \
+	signal-util.c \
 	agl-input-manager.c
 
 # options

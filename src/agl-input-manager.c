@@ -17,7 +17,36 @@
 
 #include "device-udev.h"
 #include "device-input.h"
+#include "signal-util.h"
 
+/**
+ * SIGTERM handler to use receive shutdown request from init.
+ *
+ * @param [in]	si			Detail of received signal. Refer to Linux MAN.
+ * @param [in]	userdata	Pointer to container_control_interface_t.
+ * @return int
+ * @retval 0	Success to setup container manager external interface.
+ * @retval -1	Internal error. (Force event loop exit.)
+ */
+static int sigterm_notify(const struct signalfd_siginfo *si, void *userdata)
+{
+	sd_event *event = (sd_event *)userdata;
+
+	(void) sd_event_exit(event, 0);
+
+	return 0;
+}
+/**
+ * @var		util_array
+ * @brief	Signal handling information to use signal util.
+ */
+static signal_util_t util_array[1] = {
+	[0] = {
+		.signal = SIGTERM,
+		.userdata = NULL,
+		.signal_notify = sigterm_notify
+	}
+};
 
 static int device_udev_listener_handler(device_udev_info_t *pdui, void* puserdata)
 {
@@ -47,14 +76,12 @@ int main(int argc, char *argv[])
 		goto finish;
 	}
 
-	/*
-	util_array[0].userdata = (void*)cci;
+	util_array[0].userdata = (void*)event;
 	ret = signal_setup(event, util_array, 1);
 	if (ret < 0) {
 		result = -1;
 		goto finish;
 	}
-	*/
 
 	ret = device_input_setup(&ppdi, event);
 	if (ret < 0) {
@@ -88,7 +115,9 @@ int main(int argc, char *argv[])
 	}
 
 finish:
-	event = sd_event_unref(event);
+	(void) device_input_cleanup(ppdi);
+	(void) device_udev_cleanup(pddu);
+	(void) sd_event_unref(event);
 
 	return result;
 }

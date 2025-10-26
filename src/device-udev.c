@@ -296,7 +296,7 @@ int device_udev_scan(dynamic_device_udev_t *pddu)
 	}
 
 do_return:
-	if (udev_enum == NULL) {
+	if (udev_enum != NULL) {
 		udev_enumerate_unref(udev_enum);
 	}
 
